@@ -1,0 +1,25 @@
+﻿resize:
+  max_side: 1024
+bilateral:
+  d: 9
+  sigma_color: 75.0
+  sigma_space: 75.0
+clahe:
+  enabled: true
+  clip_limit: 2.0
+  grid_size: 8
+otsu:
+  invert: true
+adaptive:
+  block_size: 11
+  c: 2.0
+  invert: true
+canny:
+  low: 50
+  high: 150
+  aperture: 3
+morphology:
+  kernel_size: 3
+  iterations: 1
+contours:
+  min_area: 20.0
