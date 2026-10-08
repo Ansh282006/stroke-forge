@@ -8,7 +8,7 @@ from pathlib import Path
 
 from vectorization.serializer import load_json
 
-from .orderer import order_paths
+from .orderer import OrderStrategy, order_paths
 from .serializer import save_ordered
 from .svg_ordered import render_svg_ordered
 from .timeline import build_timeline
@@ -23,12 +23,40 @@ def setup_logging(verbose: bool) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="stroke_engine.cli")
+    parser = argparse.ArgumentParser(
+        prog="stroke_engine.cli",
+        description="Order drawable paths and build their animation timeline.",
+    )
     parser.add_argument("--input", type=Path, required=True)
-    parser.add_argument("--output", type=Path, default=Path("data/outputs"))
-    parser.add_argument("--total-ms", type=int, default=4500)
-    parser.add_argument("--min-ms", type=int, default=120)
-    parser.add_argument("--max-ms", type=int, default=900)
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("data/outputs"),
+    )
+    parser.add_argument(
+        "--total-ms",
+        type=int,
+        default=4500,
+        help="Target total animation duration in milliseconds.",
+    )
+    parser.add_argument(
+        "--min-ms",
+        type=int,
+        default=120,
+        help="Minimum duration allowed for one path.",
+    )
+    parser.add_argument(
+        "--max-ms",
+        type=int,
+        default=900,
+        help="Maximum duration allowed for one path.",
+    )
+    parser.add_argument(
+        "--strategy",
+        choices=("importance", "length", "reading"),
+        default="importance",
+        help="Stroke ordering strategy.",
+    )
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args(argv)
 
@@ -40,25 +68,54 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     rep = load_json(args.input)
-    ordered = order_paths(rep.paths)
+
+    strategy: OrderStrategy = args.strategy
+
+    ordered = order_paths(
+        rep.paths,
+        strategy=strategy,
+    )
     rep.paths = ordered
 
     timeline, total_ms = build_timeline(
-        ordered, total_duration_ms=args.total_ms,
-        min_duration_ms=args.min_ms, max_duration_ms=args.max_ms,
+        ordered,
+        total_duration_ms=args.total_ms,
+        min_duration_ms=args.min_ms,
+        max_duration_ms=args.max_ms,
     )
 
+    rep.metadata["stroke_order"] = {
+        "strategy": strategy,
+        "num_paths": len(ordered),
+    }
+
     args.output.mkdir(parents=True, exist_ok=True)
+
     stem = args.input.stem.replace("_paths", "")
     ordered_json = args.output / f"{stem}_ordered.json"
     ordered_svg = args.output / f"{stem}_ordered.svg"
 
-    save_ordered(rep, timeline, total_ms, ordered_json)
-    render_svg_ordered(rep, ordered_svg)
+    save_ordered(
+        rep,
+        timeline,
+        total_ms,
+        ordered_json,
+    )
+
+    render_svg_ordered(
+        rep,
+        ordered_svg,
+    )
 
     logger.info("Wrote %s", ordered_json)
     logger.info("Wrote %s", ordered_svg)
-    logger.info("Total animation: %d ms across %d paths", total_ms, len(ordered))
+    logger.info(
+        "Strategy: %s | Total animation: %d ms across %d paths",
+        strategy,
+        total_ms,
+        len(ordered),
+    )
+
     return 0
 
 
