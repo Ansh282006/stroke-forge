@@ -1,0 +1,6 @@
+name: edge_baseline
+samples: data/samples
+out: results/edge_baseline
+epochs: 5
+lr: 0.001
+batch_size: 2

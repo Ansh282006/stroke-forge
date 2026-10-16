@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "StrokeForge",
+  "version": "0.8.0",
+  "description": "Image-to-animated-code preview inside your browser.",
+  "action": { "default_popup": "popup.html", "default_title": "StrokeForge" },
+  "background": { "service_worker": "background.js" },
+  "options_page": "options.html",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": ["http://127.0.0.1:8000/*", "http://localhost:8000/*"],
+  "sandbox": { "pages": ["sandbox.html"] },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    { "resources": ["sandbox.html"], "matches": ["<all_urls>"] }
+  ]
+}

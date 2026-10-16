@@ -1,53 +1,47 @@
-﻿"""Geometry helpers."""
+"""Geometry utilities (M2)."""
 from __future__ import annotations
-
 import math
+from typing import List, Sequence
 
-import cv2
-import numpy as np
+def polyline_length(points: Sequence[Sequence[float]]) -> float:
+    t = 0.0
+    for i in range(1, len(points)):
+        dx = points[i][0] - points[i-1][0]
+        dy = points[i][1] - points[i-1][1]
+        t += math.hypot(dx, dy)
+    return t
 
-
-def simplify_contour(contour: np.ndarray, epsilon_ratio: float = 0.002) -> np.ndarray:
-    if contour.ndim == 3:
-        contour = contour.reshape(-1, 2)
-    perimeter = cv2.arcLength(contour.reshape(-1, 1, 2), True)
-    epsilon = max(1.0, epsilon_ratio * perimeter)
-    approx = cv2.approxPolyDP(
-        contour.reshape(-1, 1, 2).astype(np.float32), epsilon, True
-    )
-    return approx.reshape(-1, 2)
-
-
-def polyline_length(points: list[tuple[float, float]], closed: bool) -> float:
-    if len(points) < 2:
-        return 0.0
-    total = 0.0
-    for i in range(len(points) - 1):
-        x1, y1 = points[i]
-        x2, y2 = points[i + 1]
-        total += math.hypot(x2 - x1, y2 - y1)
-    if closed:
-        x1, y1 = points[-1]
-        x2, y2 = points[0]
-        total += math.hypot(x2 - x1, y2 - y1)
-    return total
-
-
-def polygon_area(points: list[tuple[float, float]]) -> float:
-    if len(points) < 3:
-        return 0.0
+def polygon_area(points: Sequence[Sequence[float]]) -> float:
     n = len(points)
+    if n < 3: return 0.0
     s = 0.0
     for i in range(n):
-        x1, y1 = points[i]
-        x2, y2 = points[(i + 1) % n]
-        s += x1 * y2 - x2 * y1
+        j = (i + 1) % n
+        s += points[i][0] * points[j][1] - points[j][0] * points[i][1]
     return abs(s) * 0.5
 
+def bbox(points: Sequence[Sequence[float]]) -> List[float]:
+    if not points: return [0.0, 0.0, 0.0, 0.0]
+    xs = [p[0] for p in points]; ys = [p[1] for p in points]
+    x0, x1 = min(xs), max(xs); y0, y1 = min(ys), max(ys)
+    return [x0, y0, x1 - x0, y1 - y0]
 
-def bbox_of(points: list[tuple[float, float]]) -> tuple[float, float, float, float]:
-    xs = [p[0] for p in points]
-    ys = [p[1] for p in points]
-    x_min, x_max = min(xs), max(xs)
-    y_min, y_max = min(ys), max(ys)
-    return (x_min, y_min, x_max - x_min, y_max - y_min)
+def _perp_dist(p, a, b) -> float:
+    if a == b:
+        return math.hypot(p[0] - a[0], p[1] - a[1])
+    num = abs((b[0]-a[0])*(a[1]-p[1]) - (a[0]-p[0])*(b[1]-a[1]))
+    den = math.hypot(b[0]-a[0], b[1]-a[1])
+    return num / den if den else 0.0
+
+def rdp(points: List[List[float]], epsilon: float) -> List[List[float]]:
+    if len(points) < 3: return points[:]
+    a, b = points[0], points[-1]
+    dmax, idx = 0.0, 0
+    for i in range(1, len(points) - 1):
+        d = _perp_dist(points[i], a, b)
+        if d > dmax: dmax, idx = d, i
+    if dmax > epsilon:
+        left = rdp(points[:idx+1], epsilon)
+        right = rdp(points[idx:], epsilon)
+        return left[:-1] + right
+    return [a, b]

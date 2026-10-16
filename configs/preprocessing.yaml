@@ -1,25 +1,38 @@
-﻿resize:
-  max_side: 1024
-bilateral:
-  d: 9
-  sigma_color: 75.0
-  sigma_space: 75.0
-clahe:
+resize:
+  width: 512
+  height: 512
+  keep_aspect: true
+
+grayscale:
   enabled: true
+
+denoise:
+  method: bilateral
+  d: 9
+  sigma_color: 75
+  sigma_space: 75
+
+contrast:
+  method: clahe
   clip_limit: 2.0
-  grid_size: 8
-otsu:
-  invert: true
-adaptive:
-  block_size: 11
-  c: 2.0
-  invert: true
-canny:
-  low: 50
-  high: 150
-  aperture: 3
+  tile_grid: [8, 8]
+
+threshold:
+  method: otsu
+
+edges:
+  method: canny
+  low: 60
+  high: 160
+
 morphology:
-  kernel_size: 3
-  iterations: 1
+  close_kernel: 3
+  close_iter: 1
+
+skeleton:
+  enabled: true
+
 contours:
-  min_area: 20.0
+  mode: RETR_LIST
+  method: CHAIN_APPROX_SIMPLE
+  min_area: 25.0

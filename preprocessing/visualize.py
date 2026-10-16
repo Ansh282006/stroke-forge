@@ -1,51 +1,28 @@
-﻿"""Visualization helpers. Saves a grid of all pipeline stages."""
+"""Stage grid visualization (M1)."""
 from __future__ import annotations
-
 from pathlib import Path
-
 import cv2
-import matplotlib
+import numpy as np
+from .pipeline import PreprocessResult
 
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-
-from .pipeline import PreprocessResult  # noqa: E402
-
-
-def plot_stages(result: PreprocessResult, output_path: Path, title: str = "") -> None:
-    panels = [
-        ("Original", result.original, True),
-        ("Grayscale", result.grayscale, False),
-        ("Denoised", result.denoised, False),
-        ("CLAHE enhanced", result.enhanced, False),
-        ("Otsu threshold", result.otsu, False),
-        ("Adaptive threshold", result.adaptive, False),
-        ("Canny edges", result.canny, False),
-        ("Closed edges", result.closed_edges, False),
-        ("Skeleton", result.skeleton, False),
-        ("Contour overlay", result.contour_overlay, True),
-    ]
-
-    cols = 4
-    rows = (len(panels) + cols - 1) // cols
-    fig, axes = plt.subplots(rows, cols, figsize=(4 * cols, 3 * rows))
-    axes = axes.flatten()
-
-    for ax, (label, img, is_color) in zip(axes, panels):
-        if is_color:
-            ax.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-        else:
-            ax.imshow(img, cmap="gray", vmin=0, vmax=255)
-        ax.set_title(label, fontsize=10)
-        ax.axis("off")
-
-    for ax in axes[len(panels):]:
-        ax.axis("off")
-
-    if title:
-        fig.suptitle(title, fontsize=13)
-
-    fig.tight_layout()
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output_path, dpi=120, bbox_inches="tight")
-    plt.close(fig)
+def save_stage_grid(result: PreprocessResult, out_path) -> Path:
+    names = list(result.stages.keys())
+    while len(names) < 12: names.append("")
+    cols, rows = 4, 3
+    h, w = result.canvas["height"], result.canvas["width"]
+    tile = 160
+    grid = np.zeros((rows * tile, cols * tile, 3), dtype=np.uint8)
+    for i, name in enumerate(names[:12]):
+        r, c = divmod(i, cols)
+        cell = np.zeros((tile, tile, 3), dtype=np.uint8)
+        if name:
+            img = result.stages[name]
+            if img.ndim == 2:
+                img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+            img = cv2.resize(img, (tile, tile), interpolation=cv2.INTER_AREA)
+            cell = img
+            cv2.putText(cell, name, (6, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
+        grid[r*tile:(r+1)*tile, c*tile:(c+1)*tile] = cell
+    out_path = Path(out_path); out_path.parent.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(out_path), grid)
+    return out_path

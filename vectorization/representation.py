@@ -1,74 +1,43 @@
-﻿"""Drawable representation data model."""
+"""Drawable data model (M2)."""
 from __future__ import annotations
-
-from dataclasses import asdict, dataclass, field
-from typing import Any
-
+from dataclasses import dataclass, field, asdict
+from typing import Any, Dict, List, Optional
 
 @dataclass
 class Point:
     x: float
     y: float
 
+    def to_list(self): return [self.x, self.y]
 
 @dataclass
 class Path:
     id: str
-    points: list[Point]
-    closed: bool
-    length: float
-    area: float
-    bbox: tuple[float, float, float, float]
+    points: List[List[float]]
+    closed: bool = False
+    length: float = 0.0
+    area: float = 0.0
+    bbox: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0, 0.0])
     hierarchy: int = 0
     is_hole: bool = False
-    parent_id: str | None = None
+    parent_id: Optional[str] = None
     importance: float = 0.0
     order: int = 0
 
-    def to_dict(self) -> dict[str, Any]:
-        d = asdict(self)
-        d["points"] = [[p.x, p.y] for p in self.points]
-        return d
-
-    @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "Path":
-        return cls(
-            id=d["id"],
-            points=[Point(x=p[0], y=p[1]) for p in d["points"]],
-            closed=d["closed"],
-            length=d["length"],
-            area=d["area"],
-            bbox=tuple(d["bbox"]),
-            hierarchy=d.get("hierarchy", 0),
-            is_hole=d.get("is_hole", False),
-            parent_id=d.get("parent_id"),
-            importance=d.get("importance", 0.0),
-            order=d.get("order", 0),
-        )
-
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
 
 @dataclass
 class DrawableRepresentation:
-    canvas_width: int
-    canvas_height: int
-    paths: list[Path]
-    source_filename: str = ""
-    metadata: dict[str, Any] = field(default_factory=dict)
+    canvas: Dict[str, int]
+    source: Dict[str, str]
+    paths: List[Path] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> Dict[str, Any]:
         return {
-            "canvas": {"width": self.canvas_width, "height": self.canvas_height},
-            "source": {"filename": self.source_filename},
+            "canvas": self.canvas,
+            "source": self.source,
             "metadata": self.metadata,
             "paths": [p.to_dict() for p in self.paths],
         }
-
-    @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "DrawableRepresentation":
-        return cls(
-            canvas_width=d["canvas"]["width"],
-            canvas_height=d["canvas"]["height"],
-            paths=[Path.from_dict(p) for p in d["paths"]],
-            source_filename=d.get("source", {}).get("filename", ""),
-            metadata=d.get("metadata", {}),
-        )

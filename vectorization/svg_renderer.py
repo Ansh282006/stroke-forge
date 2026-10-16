@@ -1,44 +1,27 @@
-﻿"""Render a DrawableRepresentation to a plain SVG file."""
+"""Plain SVG renderer (M2)."""
 from __future__ import annotations
+from typing import List
+from .representation import DrawableRepresentation, Path
 
-from pathlib import Path as FsPath
+def _d(points: List[List[float]]) -> str:
+    if not points: return ""
+    s = f"M {points[0][0]:.2f} {points[0][1]:.2f}"
+    for p in points[1:]:
+        s += f" L {p[0]:.2f} {p[1]:.2f}"
+    return s
 
-from .representation import DrawableRepresentation
+def render(doc: DrawableRepresentation) -> str:
+    W = doc.canvas.get("width", 512); H = doc.canvas.get("height", 512)
+    parts = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}">']
+    parts.append(f'<rect width="{W}" height="{H}" fill="#ffffff"/>')
+    for p in doc.paths:
+        parts.append(f'<path d="{_d(p.points)}" fill="none" stroke="#000000" stroke-width="1.4"/>')
+    parts.append("</svg>")
+    return "".join(parts)
 
-
-def _path_d(points: list[tuple[float, float]], closed: bool) -> str:
-    if not points:
-        return ""
-    head = f"M {points[0][0]:.2f} {points[0][1]:.2f}"
-    body = " ".join(f"L {x:.2f} {y:.2f}" for x, y in points[1:])
-    tail = " Z" if closed else ""
-    return f"{head} {body}{tail}"
-
-
-def render_svg(
-    rep: DrawableRepresentation,
-    path: FsPath,
-    stroke_color: str = "#111111",
-    stroke_width: float = 1.5,
-    background: str = "#ffffff",
-) -> None:
-    lines: list[str] = []
-    lines.append(
-        f'<svg xmlns="http://www.w3.org/2000/svg" '
-        f'width="{rep.canvas_width}" height="{rep.canvas_height}" '
-        f'viewBox="0 0 {rep.canvas_width} {rep.canvas_height}">'
-    )
-    lines.append(f'<rect width="100%" height="100%" fill="{background}"/>')
-    lines.append(
-        f'<g fill="none" stroke="{stroke_color}" '
-        f'stroke-width="{stroke_width}" stroke-linecap="round" '
-        f'stroke-linejoin="round">'
-    )
-    for p in rep.paths:
-        d = _path_d([(pt.x, pt.y) for pt in p.points], p.closed)
-        if d:
-            lines.append(f'  <path id="{p.id}" d="{d}"/>')
-    lines.append("</g>")
-    lines.append("</svg>")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(lines), encoding="utf-8")
+def save(doc: DrawableRepresentation, path) -> str:
+    from pathlib import Path as P
+    svg = render(doc)
+    p = P(path); p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(svg, encoding="utf-8")
+    return svg

@@ -1,75 +1,39 @@
-﻿"""CLI: image -> DrawableRepresentation (JSON) + SVG preview."""
+"""Vectorization CLI (M2)."""
 from __future__ import annotations
-
-import argparse
-import logging
-import sys
+import argparse, sys
 from pathlib import Path
 
-import cv2
-
-from preprocessing.config import PreprocessConfig
-from preprocessing.pipeline import run_pipeline
+from preprocessing.config import load_config, default_config
+from preprocessing.pipeline import run as run_pre
 
 from .extractor import contours_to_paths
-from .representation import DrawableRepresentation
-from .serializer import save_json
-from .svg_renderer import render_svg
+from .serializer import save as save_json
+from .svg_renderer import save as save_svg
 
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description="StrokeForge vectorization (M2)")
+    ap.add_argument("--input", required=True)
+    ap.add_argument("--output", required=True)
+    ap.add_argument("--config", default=None)
+    ap.add_argument("--epsilon", type=float, default=1.2)
+    ap.add_argument("--verbose", action="store_true")
+    args = ap.parse_args(argv)
 
-def setup_logging(verbose: bool) -> None:
-    logging.basicConfig(
-        level=logging.DEBUG if verbose else logging.INFO,
-        format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    cfg = load_config(args.config) if args.config else default_config()
+    pre = run_pre(args.input, cfg)
+    doc = contours_to_paths(pre.contours, pre.canvas, pre.filename, epsilon=args.epsilon)
 
+    out_dir = Path(args.output); out_dir.mkdir(parents=True, exist_ok=True)
+    stem = Path(args.input).stem
+    json_p = save_json(doc, out_dir / f"{stem}_paths.json")
+    svg_p = out_dir / f"{stem}_paths.svg"
+    save_svg(doc, svg_p)
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="vectorization.cli")
-    parser.add_argument("--input", type=Path, required=True)
-    parser.add_argument("--output", type=Path, default=Path("data/outputs"))
-    parser.add_argument("--config", type=Path, default=Path("configs/preprocessing.yaml"))
-    parser.add_argument("--epsilon", type=float, default=0.002)
-    parser.add_argument("--verbose", action="store_true")
-    args = parser.parse_args(argv)
-
-    setup_logging(args.verbose)
-    logger = logging.getLogger("stroke-forge.vectorization")
-
-    if not args.input.exists():
-        logger.error("Input image not found: %s", args.input)
-        return 2
-
-    config = PreprocessConfig.from_yaml(args.config) if args.config.exists() else PreprocessConfig()
-
-    image = cv2.imread(str(args.input), cv2.IMREAD_UNCHANGED)
-    if image is None:
-        logger.error("Failed to read image: %s", args.input)
-        return 3
-
-    result = run_pipeline(image, config)
-    h, w = result.original.shape[:2]
-
-    paths = contours_to_paths(result.contours, hierarchy=None, epsilon_ratio=args.epsilon)
-
-    rep = DrawableRepresentation(
-        canvas_width=w, canvas_height=h, paths=paths,
-        source_filename=args.input.name,
-        metadata={"num_paths": len(paths), "preprocess": result.metadata},
-    )
-
-    args.output.mkdir(parents=True, exist_ok=True)
-    json_path = args.output / f"{args.input.stem}_paths.json"
-    svg_path = args.output / f"{args.input.stem}_paths.svg"
-
-    save_json(rep, json_path)
-    render_svg(rep, svg_path)
-
-    logger.info("Wrote %s (%d paths)", json_path, len(paths))
-    logger.info("Wrote %s", svg_path)
+    if args.verbose:
+        print(f"[M2] paths      : {len(doc.paths)}")
+        print(f"[M2] wrote      : {json_p}")
+        print(f"[M2] wrote      : {svg_p}")
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

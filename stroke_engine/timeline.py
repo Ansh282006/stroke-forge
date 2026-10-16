@@ -1,46 +1,24 @@
-﻿"""Timeline generation from ordered paths."""
+"""Duration-proportional timeline (M3)."""
 from __future__ import annotations
+from typing import Any, Dict
+from vectorization.representation import DrawableRepresentation
 
-import logging
-from dataclasses import dataclass
+MIN_MS = 120
+MAX_MS = 1200
+MS_PER_UNIT = 3.0
 
-from vectorization.representation import Path
-
-logger = logging.getLogger(__name__)
-
-
-@dataclass
-class TimelineEntry:
-    path_id: str
-    order: int
-    start_ms: int
-    duration_ms: int
-    end_ms: int
-    easing: str
-
-
-def build_timeline(
-    paths: list[Path],
-    total_duration_ms: int = 4500,
-    min_duration_ms: int = 120,
-    max_duration_ms: int = 900,
-    default_easing: str = "easeInOut",
-) -> tuple[list[TimelineEntry], int]:
-    if not paths:
-        return [], 0
-    ordered = sorted(paths, key=lambda p: p.order)
-    lengths = [max(p.length, 1e-6) for p in ordered]
-    total_length = sum(lengths)
-    raw = [total_duration_ms * (l / total_length) for l in lengths]
-    clamped = [int(max(min_duration_ms, min(max_duration_ms, d))) for d in raw]
-    entries: list[TimelineEntry] = []
+def build_timeline(doc: DrawableRepresentation) -> Dict[str, Any]:
+    entries = []
     cursor = 0
-    for path, dur in zip(ordered, clamped):
-        entries.append(TimelineEntry(
-            path_id=path.id, order=path.order,
-            start_ms=cursor, duration_ms=dur, end_ms=cursor + dur,
-            easing=default_easing,
-        ))
-        cursor += dur
-    logger.info("Timeline built | %d entries | total %d ms", len(entries), cursor)
-    return entries, cursor
+    for p in doc.paths:
+        d = int(max(MIN_MS, min(MAX_MS, p.length * MS_PER_UNIT)))
+        entries.append({
+            "path_id": p.id,
+            "order": p.order,
+            "start_ms": cursor,
+            "duration_ms": d,
+            "end_ms": cursor + d,
+            "easing": "easeInOut",
+        })
+        cursor += d
+    return {"total_ms": cursor, "entries": entries}

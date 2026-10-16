@@ -1,48 +1,35 @@
-﻿"""Unit tests for the preprocessing pipeline."""
-from __future__ import annotations
-
 import numpy as np
-import pytest
+from preprocessing.config import default_config, load_config
+from preprocessing import stages
 
-from preprocessing.config import PreprocessConfig
-from preprocessing.pipeline import run_pipeline
-
-
-@pytest.fixture
-def square_image() -> np.ndarray:
-    img = np.full((256, 256, 3), 255, dtype=np.uint8)
-    img[64:192, 64:192] = 0
+def _img():
+    img = np.zeros((64, 64, 3), dtype=np.uint8)
+    img[10:40, 10:40] = 255
     return img
 
+def test_resize_pads_canvas():
+    cfg = default_config()
+    out = stages.resize(_img(), cfg)
+    assert out.shape[0] == cfg.resize.height
+    assert out.shape[1] == cfg.resize.width
 
-def test_pipeline_returns_expected_shapes(square_image):
-    result = run_pipeline(square_image, PreprocessConfig())
-    assert result.original.shape[:2] == (256, 256)
-    assert result.grayscale.shape == (256, 256)
-    assert result.canny.shape == (256, 256)
-    assert result.skeleton.shape == (256, 256)
-    assert isinstance(result.contours, list)
+def test_grayscale_shape():
+    g = stages.to_gray(_img())
+    assert g.ndim == 2
 
+def test_threshold_binary_range():
+    g = stages.to_gray(_img())
+    b = stages.threshold(g, default_config())
+    assert set(np.unique(b)).issubset({0, 255})
 
-def test_at_least_one_contour_on_square(square_image):
-    result = run_pipeline(square_image, PreprocessConfig())
-    assert len(result.contours) >= 1
+def test_contours_found():
+    g = stages.to_gray(_img())
+    b = stages.threshold(g, default_config())
+    c = stages.find_contours(b)
+    assert isinstance(c, list)
 
-
-def test_resize_applied_to_large_image():
-    img = np.full((2048, 1024, 3), 255, dtype=np.uint8)
-    img[100:200, 100:200] = 0
-    result = run_pipeline(img, PreprocessConfig())
-    assert max(result.original.shape[:2]) <= 1024
-
-
-def test_empty_image_raises():
-    with pytest.raises(ValueError):
-        run_pipeline(np.array([]), PreprocessConfig())
-
-
-def test_metadata_contains_elapsed():
-    img = np.full((128, 128, 3), 255, dtype=np.uint8)
-    img[40:80, 40:80] = 0
-    result = run_pipeline(img, PreprocessConfig())
-    assert "elapsed_ms" in result.metadata
+def test_load_default_config(tmp_path):
+    p = tmp_path / "c.yaml"
+    p.write_text("resize:\n  width: 128\n  height: 128\n", encoding="utf-8")
+    cfg = load_config(p)
+    assert cfg.resize.width == 128

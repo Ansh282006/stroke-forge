@@ -1,83 +1,84 @@
-﻿"""Typed configuration for the preprocessing pipeline."""
+"""YAML-driven config dataclasses (M1)."""
 from __future__ import annotations
-
 from dataclasses import dataclass, field
 from pathlib import Path
-
+from typing import Any, Dict, List, Tuple
 import yaml
 
+@dataclass
+class ResizeCfg:
+    width: int = 512
+    height: int = 512
+    keep_aspect: bool = True
 
-@dataclass(frozen=True)
-class ResizeConfig:
-    max_side: int = 1024
-
-
-@dataclass(frozen=True)
-class BilateralConfig:
+@dataclass
+class DenoiseCfg:
+    method: str = "bilateral"
     d: int = 9
-    sigma_color: float = 75.0
-    sigma_space: float = 75.0
+    sigma_color: int = 75
+    sigma_space: int = 75
 
-
-@dataclass(frozen=True)
-class ClaheConfig:
-    enabled: bool = True
+@dataclass
+class ContrastCfg:
+    method: str = "clahe"
     clip_limit: float = 2.0
-    grid_size: int = 8
+    tile_grid: Tuple[int, int] = (8, 8)
 
+@dataclass
+class ThresholdCfg:
+    method: str = "otsu"
 
-@dataclass(frozen=True)
-class OtsuConfig:
-    invert: bool = True
+@dataclass
+class EdgesCfg:
+    method: str = "canny"
+    low: int = 60
+    high: int = 160
 
+@dataclass
+class MorphCfg:
+    close_kernel: int = 3
+    close_iter: int = 1
 
-@dataclass(frozen=True)
-class AdaptiveConfig:
-    block_size: int = 11
-    c: float = 2.0
-    invert: bool = True
+@dataclass
+class SkeletonCfg:
+    enabled: bool = True
 
+@dataclass
+class ContoursCfg:
+    mode: str = "RETR_LIST"
+    method: str = "CHAIN_APPROX_SIMPLE"
+    min_area: float = 25.0
 
-@dataclass(frozen=True)
-class CannyConfig:
-    low: int = 50
-    high: int = 150
-    aperture: int = 3
-
-
-@dataclass(frozen=True)
-class MorphologyConfig:
-    kernel_size: int = 3
-    iterations: int = 1
-
-
-@dataclass(frozen=True)
-class ContourConfig:
-    min_area: float = 20.0
-
-
-@dataclass(frozen=True)
+@dataclass
 class PreprocessConfig:
-    resize: ResizeConfig = field(default_factory=ResizeConfig)
-    bilateral: BilateralConfig = field(default_factory=BilateralConfig)
-    clahe: ClaheConfig = field(default_factory=ClaheConfig)
-    otsu: OtsuConfig = field(default_factory=OtsuConfig)
-    adaptive: AdaptiveConfig = field(default_factory=AdaptiveConfig)
-    canny: CannyConfig = field(default_factory=CannyConfig)
-    morphology: MorphologyConfig = field(default_factory=MorphologyConfig)
-    contours: ContourConfig = field(default_factory=ContourConfig)
+    resize: ResizeCfg = field(default_factory=ResizeCfg)
+    grayscale: Dict[str, Any] = field(default_factory=lambda: {"enabled": True})
+    denoise: DenoiseCfg = field(default_factory=DenoiseCfg)
+    contrast: ContrastCfg = field(default_factory=ContrastCfg)
+    threshold: ThresholdCfg = field(default_factory=ThresholdCfg)
+    edges: EdgesCfg = field(default_factory=EdgesCfg)
+    morphology: MorphCfg = field(default_factory=MorphCfg)
+    skeleton: SkeletonCfg = field(default_factory=SkeletonCfg)
+    contours: ContoursCfg = field(default_factory=ContoursCfg)
 
-    @classmethod
-    def from_yaml(cls, path: Path) -> "PreprocessConfig":
-        with open(path, "r", encoding="utf-8") as f:
-            raw = yaml.safe_load(f) or {}
-        return cls(
-            resize=ResizeConfig(**raw.get("resize", {})),
-            bilateral=BilateralConfig(**raw.get("bilateral", {})),
-            clahe=ClaheConfig(**raw.get("clahe", {})),
-            otsu=OtsuConfig(**raw.get("otsu", {})),
-            adaptive=AdaptiveConfig(**raw.get("adaptive", {})),
-            canny=CannyConfig(**raw.get("canny", {})),
-            morphology=MorphologyConfig(**raw.get("morphology", {})),
-            contours=ContourConfig(**raw.get("contours", {})),
-        )
+def _as(cls, data):
+    if data is None: return cls()
+    if isinstance(data, cls): return data
+    return cls(**data)
+
+def load_config(path) -> PreprocessConfig:
+    raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    return PreprocessConfig(
+        resize=_as(ResizeCfg, raw.get("resize")),
+        grayscale=raw.get("grayscale", {"enabled": True}),
+        denoise=_as(DenoiseCfg, raw.get("denoise")),
+        contrast=_as(ContrastCfg, raw.get("contrast")),
+        threshold=_as(ThresholdCfg, raw.get("threshold")),
+        edges=_as(EdgesCfg, raw.get("edges")),
+        morphology=_as(MorphCfg, raw.get("morphology")),
+        skeleton=_as(SkeletonCfg, raw.get("skeleton")),
+        contours=_as(ContoursCfg, raw.get("contours")),
+    )
+
+def default_config() -> PreprocessConfig:
+    return PreprocessConfig()

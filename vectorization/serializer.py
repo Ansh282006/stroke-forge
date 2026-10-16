@@ -1,19 +1,21 @@
-﻿"""JSON save/load for the DrawableRepresentation."""
+"""JSON save/load (M2)."""
 from __future__ import annotations
-
 import json
-from pathlib import Path as FsPath
+from pathlib import Path
+from typing import Any, Dict
+from .representation import Path, DrawableRepresentation
 
-from .representation import DrawableRepresentation
+def save(doc: DrawableRepresentation, path) -> Path:
+    path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(doc.to_dict(), indent=2), encoding="utf-8")
+    return path
 
-
-def save_json(rep: DrawableRepresentation, path: FsPath) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(rep.to_dict(), f, indent=2)
-
-
-def load_json(path: FsPath) -> DrawableRepresentation:
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    return DrawableRepresentation.from_dict(data)
+def load(path) -> DrawableRepresentation:
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    paths = [Path(**p) for p in data.get("paths", [])]
+    return DrawableRepresentation(
+        canvas=data.get("canvas", {}),
+        source=data.get("source", {}),
+        paths=paths,
+        metadata=data.get("metadata", {}),
+    )

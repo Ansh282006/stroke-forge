@@ -1,75 +1,78 @@
-﻿"""Individual preprocessing stages. Each function is pure."""
+"""Pure stage functions (M1)."""
 from __future__ import annotations
-
+from typing import List
 import cv2
 import numpy as np
-from skimage.morphology import skeletonize
+from skimage.morphology import skeletonize as sk_skel
 
+from .config import PreprocessConfig
 
-def resize_max(image: np.ndarray, max_side: int) -> np.ndarray:
-    h, w = image.shape[:2]
-    longest = max(h, w)
-    if longest <= max_side:
-        return image
-    scale = max_side / float(longest)
-    new_size = (int(round(w * scale)), int(round(h * scale)))
-    return cv2.resize(image, new_size, interpolation=cv2.INTER_AREA)
+def resize(img, cfg: PreprocessConfig):
+    w, h = cfg.resize.width, cfg.resize.height
+    if cfg.resize.keep_aspect:
+        ih, iw = img.shape[:2]
+        s = min(w / iw, h / ih)
+        nw, nh = max(1, int(iw * s)), max(1, int(ih * s))
+        img = cv2.resize(img, (nw, nh), interpolation=cv2.INTER_AREA)
+        canvas = np.zeros((h, w, 3), dtype=img.dtype) if img.ndim == 3 else np.zeros((h, w), dtype=img.dtype)
+        oy, ox = (h - nh) // 2, (w - nw) // 2
+        if img.ndim == 3: canvas[oy:oy+nh, ox:ox+nw] = img
+        else: canvas[oy:oy+nh, ox:ox+nw] = img
+        return canvas
+    return cv2.resize(img, (w, h), interpolation=cv2.INTER_AREA)
 
+def to_gray(img):
+    if img.ndim == 2: return img
+    return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-def to_grayscale(image: np.ndarray) -> np.ndarray:
-    if image.ndim == 2:
-        return image
-    if image.shape[2] == 4:
-        image = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
-    return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+def denoise(gray, cfg):
+    if cfg.denoise.method == "bilateral":
+        return cv2.bilateralFilter(gray, cfg.denoise.d, cfg.denoise.sigma_color, cfg.denoise.sigma_space)
+    if cfg.denoise.method == "gaussian":
+        return cv2.GaussianBlur(gray, (5, 5), 0)
+    if cfg.denoise.method == "median":
+        return cv2.medianBlur(gray, 5)
+    return gray
 
+def contrast(gray, cfg):
+    if cfg.contrast.method == "clahe":
+        clahe = cv2.createCLAHE(clipLimit=cfg.contrast.clip_limit, tileGridSize=tuple(cfg.contrast.tile_grid))
+        return clahe.apply(gray)
+    if cfg.contrast.method == "equalize":
+        return cv2.equalizeHist(gray)
+    return gray
 
-def denoise_bilateral(
-    gray: np.ndarray, d: int, sigma_color: float, sigma_space: float
-) -> np.ndarray:
-    return cv2.bilateralFilter(gray, d, sigma_color, sigma_space)
+def threshold(gray, cfg):
+    if cfg.threshold.method == "otsu":
+        _, b = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+        return b
+    if cfg.threshold.method == "adaptive":
+        return cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
+    return gray
 
+def edges(gray, cfg):
+    if cfg.edges.method == "canny":
+        return cv2.Canny(gray, cfg.edges.low, cfg.edges.high)
+    if cfg.edges.method == "sobel":
+        gx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
+        gy = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
+        mag = np.hypot(gx, gy)
+        return np.clip(mag, 0, 255).astype(np.uint8)
+    if cfg.edges.method == "laplacian":
+        lap = cv2.Laplacian(gray, cv2.CV_64F)
+        return np.clip(np.abs(lap), 0, 255).astype(np.uint8)
+    return gray
 
-def apply_clahe(gray: np.ndarray, clip_limit: float, grid_size: int) -> np.ndarray:
-    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(grid_size, grid_size))
-    return clahe.apply(gray)
+def morphology_close(binary, cfg):
+    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (cfg.morphology.close_kernel,) * 2)
+    return cv2.morphologyEx(binary, cv2.MORPH_CLOSE, k, iterations=cfg.morphology.close_iter)
 
+def skeletonize(binary, cfg):
+    if not cfg.skeleton.enabled: return binary
+    b = binary.astype(bool)
+    sk = sk_skel(b)
+    return (sk.astype(np.uint8)) * 255
 
-def otsu_threshold(gray: np.ndarray, invert: bool = True) -> np.ndarray:
-    _, th = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    return cv2.bitwise_not(th) if invert else th
-
-
-def adaptive_threshold(
-    gray: np.ndarray, block: int, c: float, invert: bool = True
-) -> np.ndarray:
-    th = cv2.adaptiveThreshold(
-        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, block, c
-    )
-    return cv2.bitwise_not(th) if invert else th
-
-
-def canny_edges(gray: np.ndarray, low: int, high: int, aperture: int) -> np.ndarray:
-    return cv2.Canny(gray, low, high, apertureSize=aperture, L2gradient=True)
-
-
-def morphological_close(binary: np.ndarray, kernel_size: int, iterations: int) -> np.ndarray:
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
-    return cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=iterations)
-
-
-def skeletonize_binary(binary: np.ndarray) -> np.ndarray:
-    if binary.dtype != np.uint8:
-        binary = binary.astype(np.uint8)
-    skel = skeletonize(binary > 0)
-    return (skel.astype(np.uint8)) * 255
-
-
-def find_contours(
-    binary: np.ndarray, min_area: float
-) -> tuple[list[np.ndarray], np.ndarray | None]:
-    contours, hierarchy = cv2.findContours(
-        binary, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE
-    )
-    filtered = [c for c in contours if cv2.contourArea(c) >= min_area]
-    return filtered, hierarchy
+def find_contours(binary):
+    cts, _ = cv2.findContours(binary, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    return list(cts)

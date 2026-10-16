@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>StrokeForge</title>
+    <style>
+      body { width: 320px; font-family: system-ui, sans-serif; background: #05060a; color: #e7e9ee; padding: 12px; }
+      h1 { font-size: 15px; margin: 0 0 10px; }
+      select, button { width: 100%; padding: 8px; margin-top: 8px; border-radius: 8px; border: 1px solid #ffffff22; background: #ffffff10; color: inherit; }
+      button { background: #00f0ff; color: #000; font-weight: 600; border: none; cursor: pointer; }
+      small { color: #94a3b8; }
+    </style>
+  </head>
+  <body>
+    <h1>StrokeForge</h1>
+    <small>Style</small>
+    <select id="style">
+      <option value="outline">Outline</option>
+      <option value="neon" selected>Neon</option>
+      <option value="sketch">Sketch</option>
+      <option value="pencil">Pencil</option>
+      <option value="lineart">Line Art</option>
+      <option value="blueprint">Blueprint</option>
+      <option value="particle">Particle</option>
+    </select>
+    <button id="go">Preview on this page</button>
+    <script src="popup.js"></script>
+  </body>
+</html>
